@@ -1,5 +1,5 @@
 /*@license
-ARIA Date Picker Module 4.12 for Apex 4X
+ARIA Date Picker Module 5.4 for Apex 4X
 Author: Bryan Garaventa (https://www.linkedin.com/in/bgaraventa)
 Contributions by Danny Allen (dannya.com) / Wonderscore Ltd (wonderscore.co.uk)
 https://github.com/whatsock/apex
@@ -39,6 +39,10 @@ License: MIT <https://opensource.org/licenses/MIT>
           helpText = config.helpText
             ? config.helpText
             : "Press the arrow keys to navigate by day, PageUp and PageDown to navigate by month, Alt+PageUp and Alt+PageDown to navigate by year, or Escape to cancel.",
+          monthOnly = config.monthOnly === true,
+          monthSelect = monthOnly || config.monthSelect === true,
+          yearSelect = monthOnly || config.yearSelect === true,
+          forceSelect = monthOnly || config.forceSelect === true,
           // Toggles for openOnFocus support.
           openOnFocusHelpText = config.openOnFocusHelpText
             ? config.openOnFocusHelpText
@@ -48,7 +52,7 @@ License: MIT <https://opensource.org/licenses/MIT>
           pId = config.id || $A.genId(),
           trigger = $A.morph(config.toggle),
           targ = $A.morph(config.input),
-          commentsEnabled = config.enableComments === true,
+          commentsEnabled = !monthOnly && config.enableComments === true,
           // Control the behavior of date selection clicks
           handleClick = $A.isFn(config.onActivate)
             ? config.onActivate
@@ -382,6 +386,7 @@ License: MIT <https://opensource.org/licenses/MIT>
               formatDate: function (dc, dateFormatTokens, dateFormat) {
                 if (!dateFormatTokens)
                   dateFormatTokens = {
+                    yy: ("0" + dc.range.current.year).slice(-2),
                     YYYY: dc.range.current.year,
                     MMMM: dc.range[dc.range.current.month].name,
                     dddd: dc.range.wDays[dc.range.current.wDay].lng,
@@ -442,19 +447,22 @@ License: MIT <https://opensource.org/licenses/MIT>
                 if (!o) return false;
 
                 dc.current = o;
-                dc.query("td.dayInMonth.selected", function (i, p) {
-                  $A.setAttr(p, {
-                    tabindex: "-1",
-                  });
 
-                  $A.remClass(p, "selected");
-                  $A.data(p, "_Selected", 0);
-                });
-                $A.addClass(o, "selected");
-                $A.data(o, "_Selected", true);
-                $A.setAttr(o, {
-                  tabindex: "0",
-                });
+                if (!monthOnly) {
+                  dc.query("td.dayInMonth.selected", function (i, p) {
+                    $A.setAttr(p, {
+                      tabindex: "-1",
+                    });
+
+                    $A.remClass(p, "selected");
+                    $A.data(p, "_Selected", 0);
+                  });
+                  $A.addClass(o, "selected");
+                  $A.data(o, "_Selected", true);
+                  $A.setAttr(o, {
+                    tabindex: "0",
+                  });
+                }
 
                 if (!s) {
                   if (dc.navBtn === "PM") {
@@ -498,16 +506,22 @@ License: MIT <https://opensource.org/licenses/MIT>
                     }, 1);
                     dc.navBtnS = true;
                   } else if (dc.navBtn === "CY") {
-                    dc.buttons.cY.focus();
-                  } else if (dc.navBtn === "CM") {
-                    dc.buttons.cM.focus();
+                    if (!dc.buttons.cYS.hidden) dc.buttons.cYS.focus();
+                    else if (!dc.buttons.cY.hidden) dc.buttons.cY.focus();
+                  } else if (
+                    dc.navBtn === "CM" ||
+                    (monthOnly && (!dc.openOnFocus || triggered))
+                  ) {
+                    if (!dc.buttons.cMS.hidden) dc.buttons.cMS.focus();
+                    else if (!dc.buttons.cM.hidden) dc.buttons.cM.focus();
                   } else {
                     // Toggles for openOnFocus support.
                     if (
                       !dc.openOnFocus ||
                       (dc.openOnFocus && !onFocusInit && onFocusTraverse)
-                    )
+                    ) {
                       o.focus();
+                    }
                   }
                 }
 
@@ -931,18 +945,55 @@ License: MIT <https://opensource.org/licenses/MIT>
                 dc.rerendering = false;
               },
               beforeRender: function (dc) {
-                var dateValue = targ.value,
+                function isValidDateString(dateString) {
+                  var regex_mmddyyyy =
+                      /^(0?[1-9]|1[0-2])\/(0?[1-9]|[12][0-9]|3[01])\/\d{4}$/,
+                    regex_ddmmyyyy =
+                      /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[0-2])\/\d{4}$/;
+                  return (
+                    regex_mmddyyyy.test(dateString) ||
+                    regex_ddmmyyyy.test(dateString)
+                  );
+                }
+                var dateValue = targ.value.replace(/\.|\-/g, "/"),
                   dateParts = targ.value.split("/");
-                if (
+                if (dateParts.length === 2) {
+                  if (dateParts[1] > 12) {
+                    if (dateParts[1].length === 2)
+                      dateParts[1] = "20" + dateParts[1];
+                    dateValue = dateParts[0] + "/01/" + dateParts[1];
+                  } else if (dateParts[0] > 12) {
+                    if (dateParts[0].length === 2)
+                      dateParts[0] = "20" + dateParts[0];
+                    dateValue = dateParts[1] + "/01/" + dateParts[0];
+                  }
+                } else if (
                   config.inputDateFormat === "DD/MM/YYYY" &&
                   dateParts.length === 3
                 ) {
+                  if (dateParts[2].length === 2)
+                    dateParts[2] = "20" + dateParts[2];
                   dateValue =
                     dateParts[1] + "/" + dateParts[0] + "/" + dateParts[2];
-                } else if (config.inputDateFormat === "DD/MM/YYYY") {
-                  dateValue = new Date();
+                } else if (
+                  config.inputDateFormat === "MM/DD/YYYY" &&
+                  dateParts.length === 3
+                ) {
+                  if (dateParts[2].length === 2)
+                    dateParts[2] = "20" + dateParts[2];
+                  dateValue =
+                    dateParts[0] + "/" + dateParts[1] + "/" + dateParts[2];
                 }
-                if (!dc.rerendering && dateValue) {
+                var isValid = isValidDateString(dateValue);
+                if (!isValid) {
+                  dateValue = dc.initialDate;
+                }
+                if (
+                  !dc.rerendering &&
+                  isValid &&
+                  dateValue &&
+                  !dc.isOutsideDateRange(new Date(dateValue))
+                ) {
                   dc.presetDate(dc, new Date(dateValue));
                 }
 
@@ -1045,8 +1096,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                     dc.tooltipTxt.replace(/<|>|\"/g, "") +
                     '">' +
                     // Add year select field if enabled.
-                    (config.yearSelect
-                      ? '<select hidden class="nav current select year" id="' +
+                    (yearSelect
+                      ? "<select " +
+                        (forceSelect ? "" : "hidden ") +
+                        'class="nav current select year" id="' +
                         dc.currentBtnId +
                         'Y" title="' +
                         dc.yearTxt.replace(/<|>|\"/g, "") +
@@ -1058,6 +1111,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                               config.yearSelectMin || dc.range.current.year,
                             max = config.yearSelectMax || dc.range.current.year,
                             s = "";
+                          if (dc.minDate instanceof Date)
+                            min = Math.min(min, dc.minDate.getFullYear());
+                          if (dc.maxDate instanceof Date)
+                            max = Math.max(max, dc.maxDate.getFullYear());
                           while (min <= max) {
                             if (!dc.isDisabledYear(dc, min))
                               s +=
@@ -1075,7 +1132,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                           return s;
                         })() +
                         "</select>" +
-                        '<span class="nav current btn year" tabindex="0" role="button" id="' +
+                        "<span " +
+                        (forceSelect ? "hidden " : "") +
+                        'class="nav current btn year" tabindex="0" role="button" id="' +
                         dc.currentBtnId +
                         'YB">' +
                         dc.range.current.year +
@@ -1138,8 +1197,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                   "</span></td>" +
                   '<td colspan="5" class="month" role="presentation">' +
                   // Add month select field if enabled.
-                  (config.monthSelect
-                    ? '<select hidden class="nav current select month" id="' +
+                  (monthSelect
+                    ? "<select " +
+                      (forceSelect ? "" : "hidden ") +
+                      'class="nav current select month" id="' +
                       dc.currentBtnId +
                       'M" title="' +
                       dc.monthTxt.replace(/<|>|\"/g, "") +
@@ -1166,7 +1227,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                         return s;
                       })() +
                       "</select>" +
-                      '<span class="nav current btn month" tabindex="0" role="button" id="' +
+                      "<span " +
+                      (forceSelect ? "hidden " : "") +
+                      'class="nav current btn month" tabindex="0" role="button" id="' +
                       dc.currentBtnId +
                       'MB">' +
                       dc.range[dc.range.current.month].name +
@@ -1209,7 +1272,8 @@ License: MIT <https://opensource.org/licenses/MIT>
                   '<table role="presentation" class="calendar">' +
                   yearSelector +
                   monthSelector +
-                  '<tr role="presentation" aria-hidden="true">';
+                  '<tr role="presentation" aria-hidden="true"' +
+                  (monthOnly ? ' hidden="hidden">' : ">");
 
                 dc.iter = 0;
 
@@ -1229,7 +1293,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                     d.shrt +
                     "</span></th>";
                 }
-                dc.content += '</tr><tr role="presentation">';
+                dc.content +=
+                  '</tr><tr role="presentation"' +
+                  (monthOnly ? ' hidden="hidden">' : ">");
 
                 // Start drawing day cells
                 var m = new Date();
@@ -1307,7 +1373,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                   var w = m.getDay();
 
                   if (w === dc.iter && i < dc.range[dc.range.current.month].max)
-                    dc.content += '</tr><tr role="presentation">';
+                    dc.content +=
+                      '</tr><tr role="presentation"' +
+                      (monthOnly ? ' hidden="hidden">' : ">");
                 }
 
                 if (dc.drawFullCalendar === true) {
@@ -1436,11 +1504,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                 }
               },
               afterRender: function (dc) {
-                if (dc.showEscBtn) {
-                  dc.escBtn = dc.container.querySelector("button.esc-button");
-                }
-
                 dc.buttons = {
+                  esc: !dc.showEscBtn
+                    ? null
+                    : dc.container.querySelector("button.esc-button"),
                   pY: config.condenseYear ? null : $A.get(dc.prevBtnId + "Y"),
                   nY: config.condenseYear ? null : $A.get(dc.nextBtnId + "Y"),
                   pM: $A.get(dc.prevBtnId),
@@ -1606,483 +1673,466 @@ License: MIT <https://opensource.org/licenses/MIT>
                   };
                 var isKP = false;
 
-                $A.on(
-                  "#" + dc.containerId + " td.day",
-                  {
-                    focus: function (ev) {
-                      if ($A.data(this, "_HasComment")) {
-                        var year =
-                            dc.range[dc.range.current.month].comments[
-                              dc.range.current.year
-                            ],
-                          all = dc.range[dc.range.current.month].comments["*"],
-                          comm = "";
+                if (!monthOnly)
+                  $A.on(
+                    "#" + dc.containerId + " td.day",
+                    {
+                      focus: function (ev) {
+                        if ($A.data(this, "_HasComment")) {
+                          var year =
+                              dc.range[dc.range.current.month].comments[
+                                dc.range.current.year
+                              ],
+                            all =
+                              dc.range[dc.range.current.month].comments["*"],
+                            comm = "";
 
-                        if (year && year[dc.range.current.mDay])
-                          comm = year[dc.range.current.mDay];
-                        else if (all && all[dc.range.current.mDay])
-                          comm = all[dc.range.current.mDay];
-                        comm = $A.trim(comm.replace(/<|>/g, ""));
+                          if (year && year[dc.range.current.mDay])
+                            comm = year[dc.range.current.mDay];
+                          else if (all && all[dc.range.current.mDay])
+                            comm = all[dc.range.current.mDay];
+                          comm = $A.trim(comm.replace(/<|>/g, ""));
 
-                        if (comm) {
-                          commentDC.content = comm;
-                          commentDC.rerender(function () {
-                            if (formDC.openEditor) {
-                              formDC.openEditor = false;
+                          if (comm) {
+                            commentDC.content = comm;
+                            commentDC.rerender(function () {
+                              if (formDC.openEditor) {
+                                formDC.openEditor = false;
 
-                              if (formDC.loaded) formDC.reset();
-                            }
-                          });
+                                if (formDC.loaded) formDC.reset();
+                              }
+                            });
+                          }
+                        } else if (commentDC.loaded) {
+                          commentDC.remove();
                         }
-                      } else if (commentDC.loaded) {
-                        commentDC.remove();
-                      }
-                    },
-                    click: function (ev) {
-                      // If items from a previous / next month are selected, modify the date accordingly
-                      if ($A.hasClass(this, "dayInPrevMonth")) {
-                        var prevDateValues = dc.modifyDateValues(
-                          {
-                            month: dc.range.current.month,
-                            year: dc.range.current.year,
-                          },
-                          {
-                            month: -1,
-                          },
-                        );
+                      },
+                      click: function (ev) {
+                        // If items from a previous / next month are selected, modify the date accordingly
+                        if ($A.hasClass(this, "dayInPrevMonth")) {
+                          var prevDateValues = dc.modifyDateValues(
+                            {
+                              month: dc.range.current.month,
+                              year: dc.range.current.year,
+                            },
+                            {
+                              month: -1,
+                            },
+                          );
 
-                        dc.date = new Date(
-                          prevDateValues.year,
-                          prevDateValues.month,
-                          dc.range.track[this.id],
-                        );
-                      } else if ($A.hasClass(this, "dayInNextMonth")) {
-                        var nextDateValues = dc.modifyDateValues(
-                          {
-                            month: dc.range.current.month,
-                            year: dc.range.current.year,
-                          },
-                          {
-                            month: 1,
-                          },
-                        );
+                          dc.date = new Date(
+                            prevDateValues.year,
+                            prevDateValues.month,
+                            dc.range.track[this.id],
+                          );
+                        } else if ($A.hasClass(this, "dayInNextMonth")) {
+                          var nextDateValues = dc.modifyDateValues(
+                            {
+                              month: dc.range.current.month,
+                              year: dc.range.current.year,
+                            },
+                            {
+                              month: 1,
+                            },
+                          );
 
-                        dc.date = new Date(
-                          nextDateValues.year,
-                          nextDateValues.month,
-                          dc.range.track[this.id],
-                        );
-                      } else {
-                        // Selection in current month, just adjust the date
-                        dc.date.setDate(dc.range.track[this.id]);
-                      }
-
-                      dc.setCurrent(dc);
-
-                      if (
-                        $A.data(this, "_Selected") ||
-                        (!commentsEnabled && !$A.data(this, "_HasComment"))
-                      ) {
-                        if (!$A.data(this, "disabled")) {
-                          $A.extend(true, dc.fn.current, dc.range.current);
-                          // Toggles for openOnFocus support.
-                          onFocusInit = false;
-                          onFocusTraverse = true;
-                          dc.storeCurrentDate(dc);
-                          handleClick.apply(this, [ev, dc, targ]);
+                          dc.date = new Date(
+                            nextDateValues.year,
+                            nextDateValues.month,
+                            dc.range.track[this.id],
+                          );
                         } else {
-                          ev.stopPropagation();
-                          ev.preventDefault();
-                        }
-                      } else dc.setFocus(this);
-                      ev.preventDefault();
-                    },
-                    keydown: function (ev) {
-                      changePressed(ev);
-                      var k = $A.keyEvent(ev);
-                      if (k === 13) {
-                        isKP = true;
-
-                        if (!$A.data(this, "disabled")) {
-                          $A.extend(true, dc.fn.current, dc.range.current);
-                          // Toggles for openOnFocus support.
-                          onFocusInit = false;
-                          onFocusTraverse = true;
-                          dc.storeCurrentDate(dc);
-                          handleClick.apply(this, [ev, dc, targ]);
+                          // Selection in current month, just adjust the date
+                          dc.date.setDate(dc.range.track[this.id]);
                         }
 
-                        ev.preventDefault();
-                      } else if (
-                        k === 32 &&
-                        commentsEnabled &&
-                        config.editor &&
-                        config.editor.show &&
-                        !formDC.openEditor
-                      ) {
-                        formDC.openEditor = true;
-                        formDC.reset();
-                        ev.preventDefault();
-                      } else if (
-                        (k >= 37 && k <= 40) ||
-                        k === 27 ||
-                        (k >= 33 && k <= 36)
-                      ) {
-                        var wd = dc.range.current.wDay;
+                        dc.setCurrent(dc);
 
-                        if (k === 37) {
-                          // Left arrow key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (dc.range.current.mDay > 1) {
-                            dc.range.current.mDay--;
-                            dc.range.current.wDay = !wd ? 6 : wd - 1;
-
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          } else if (
-                            dc.range.current.mDay === 1 &&
-                            !$A.data(dc.buttons.pM, "disabled")
-                          ) {
-                            var dateValues = dc.modifyDateValues(
-                              {
-                                month: dc.range.current.month,
-                                year: dc.range.current.year,
-                              },
-                              {
-                                month: -1,
-                              },
-                            );
-
-                            var day = dc.range[dateValues.month].max;
-
-                            if (dateValues.month === 1)
-                              day =
-                                new Date(dateValues.year, 1, 29).getMonth() ===
-                                1
-                                  ? 29
-                                  : 28;
-
-                            dc.date = new Date(
-                              dateValues.year,
-                              dateValues.month,
-                              day,
-                            );
-                            dc.setCurrent(dc);
-                            dc.rerenderTable(dc);
-                          }
-                        } else if (k === 39) {
-                          // Right arrow key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (
-                            dc.range.current.mDay <
-                            dc.range[dc.range.current.month].max
-                          ) {
-                            dc.range.current.mDay++;
-                            dc.range.current.wDay = wd === 6 ? 0 : wd + 1;
-
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          } else if (
-                            dc.range.current.mDay ==
-                              dc.range[dc.range.current.month].max &&
-                            !$A.data(dc.buttons.nM, "disabled")
-                          ) {
-                            var dateValues = dc.modifyDateValues(
-                              {
-                                month: dc.range.current.month,
-                                year: dc.range.current.year,
-                              },
-                              {
-                                month: 1,
-                              },
-                            );
-
-                            dc.date = new Date(
-                              dateValues.year,
-                              dateValues.month,
-                              1,
-                            );
-                            dc.setCurrent(dc);
-                            dc.rerenderTable(dc);
-                          }
-                        } else if (k === 38) {
-                          // Up arrow key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (dc.range.current.mDay - 7 > 0) {
-                            dc.range.current.mDay -= 7;
-
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          } else if (!$A.data(dc.buttons.pM, "disabled")) {
-                            // Go to previous month
-                            var dateValues = dc.modifyDateValues(
-                              {
-                                month: dc.range.current.month,
-                                year: dc.range.current.year,
-                              },
-                              {
-                                month: -1,
-                              },
-                            );
-
-                            if (
-                              dateValues.month === 1 &&
-                              new Date(dateValues.year, 1, 29).getMonth() === 1
-                            )
-                              dc.range[dateValues.month].max = 29;
-                            else if (dateValues.month === 1)
-                              dc.range[dateValues.month].max = 28;
-
-                            var day =
-                                dc.range[dateValues.month].max +
-                                (dc.range.current.mDay - 7),
-                              intendedDate = new Date(
-                                dateValues.year,
-                                dateValues.month,
-                                day,
-                              );
-
-                            // If intended selected date one month previous is outside of date range, do not attempt
-                            // to select the date cell
-                            if (!dc.isOutsideDateRange(intendedDate)) {
-                              dc.date = intendedDate;
-                              dc.setCurrent(dc);
-                              dc.rerenderTable(dc);
-                            }
-                          }
-                        } else if (k === 40) {
-                          // Down arrow key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (
-                            dc.range.current.mDay + 7 <=
-                            dc.range[dc.range.current.month].max
-                          ) {
-                            dc.range.current.mDay += 7;
-
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          } else if (!$A.data(dc.buttons.nM, "disabled")) {
-                            // Go to next month
-                            var dateValues = dc.modifyDateValues(
-                              {
-                                month: dc.range.current.month,
-                                year: dc.range.current.year,
-                              },
-                              {
-                                month: 1,
-                              },
-                            );
-
-                            var day =
-                                dc.range.current.mDay +
-                                7 -
-                                dc.range[dc.range.current.month].max,
-                              intendedDate = new Date(
-                                dateValues.year,
-                                dateValues.month,
-                                day,
-                              );
-
-                            // If intended selected date one month ahead is outside of date range, do not attempt
-                            // to select the date cell
-                            if (!dc.isOutsideDateRange(intendedDate)) {
-                              dc.date = intendedDate;
-                              dc.setCurrent(dc);
-                              dc.rerenderTable(dc);
-                            }
-                          }
-                        } else if (k === 27) {
-                          // Esc key
-                          dc.remove();
-                          // Toggles for openOnFocus support.
-                          onFocusInit = false;
-                          onFocusTraverse = true;
-                          $A.focus(config.returnFocusTo || targ);
-                        } else if (k === 33) {
-                          // PageUp key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (dc.pageUpDownNatural) {
-                            if (pressed.alt) {
-                              gYear(false);
-                            } else {
-                              pMonth();
-                            }
+                        if (
+                          $A.data(this, "_Selected") ||
+                          (!commentsEnabled && !$A.data(this, "_HasComment"))
+                        ) {
+                          if (!$A.data(this, "disabled")) {
+                            $A.extend(true, dc.fn.current, dc.range.current);
+                            // Toggles for openOnFocus support.
+                            onFocusInit = false;
+                            onFocusTraverse = true;
+                            dc.storeCurrentDate(dc);
+                            handleClick.apply(this, [ev, dc, targ]);
                           } else {
-                            if (pressed.alt) {
-                              gYear(true);
-                            } else {
-                              nMonth();
-                            }
+                            ev.stopPropagation();
+                            ev.preventDefault();
                           }
-                        } else if (k === 34) {
-                          // PageDown key
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (dc.pageUpDownNatural) {
-                            if (pressed.alt) {
-                              gYear(true);
-                            } else {
-                              nMonth();
-                            }
-                          } else {
-                            if (pressed.alt) {
-                              gYear(false);
-                            } else {
-                              pMonth();
-                            }
-                          }
-                        } else if (k === 36) {
-                          // Home key (goes to the first day of the row)
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (wd !== dc.iterS && dc.range.current.mDay > 1) {
-                            while (
-                              dc.range.current.wDay !== dc.iterS &&
-                              $A.get(dc.baseId + (dc.range.current.mDay - 1))
-                            ) {
-                              dc.range.current.wDay =
-                                dc.range.current.wDay - 1 < 0
-                                  ? 6
-                                  : dc.range.current.wDay - 1;
-                              dc.range.current.mDay--;
-                            }
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          }
-                        } else if (k === 35) {
-                          // End key (goes to the last day of the row)
-                          $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                          if (
-                            wd !== dc.iterE &&
-                            dc.range.current.mDay <
-                              dc.range[dc.range.current.month].max
-                          ) {
-                            while (
-                              dc.range.current.wDay !== dc.iterE &&
-                              $A.get(dc.baseId + (dc.range.current.mDay + 1))
-                            ) {
-                              dc.range.current.wDay =
-                                dc.range.current.wDay + 1 > 6
-                                  ? 0
-                                  : dc.range.current.wDay + 1;
-                              dc.range.current.mDay++;
-                            }
-                            dc.setFocus(
-                              dc.range.index[dc.range.current.mDay - 1],
-                              this,
-                            );
-                          }
-                        }
+                        } else dc.setFocus(this);
                         ev.preventDefault();
-                      } else if (
-                        k === 9 &&
-                        !pressed.alt &&
-                        !pressed.ctrl &&
-                        !pressed.shift
-                      ) {
-                        // Tab key (without any simultaneous modifiers Alt / Ctrl / Shift)
-                        $A.extend(true, dc.prevCurrent, dc.range.current);
+                      },
+                      keydown: function (ev) {
+                        changePressed(ev);
+                        var k = $A.keyEvent(ev);
+                        if (k === 13) {
+                          isKP = true;
 
-                        if (commentsEnabled && formDC.loaded) {
-                          if (!formDC.textarea.hidden) formDC.textarea.focus();
-                          else formDC.commentBtn.focus();
-                        } else if (!dc.showEscBtn) {
-                          if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.pY, "disabled")
-                          )
-                            dc.buttons.pY.focus();
-                          else if (!config.condenseYear && dc.buttons.cY)
-                            dc.buttons.cY.focus();
-                          else if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.nY, "disabled")
-                          )
-                            dc.buttons.nY.focus();
-                          else if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (dc.buttons.cM) dc.buttons.cM.focus();
-                          else if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
-
-                          ev.preventDefault();
-                        }
-                      } else if (
-                        k === 9 &&
-                        !pressed.alt &&
-                        !pressed.ctrl &&
-                        pressed.shift
-                      ) {
-                        // Tab key (with simultaneous Shift modifier)
-                        $A.extend(true, dc.prevCurrent, dc.range.current);
-
-                        if (!$A.data(dc.buttons.nM, "disabled"))
-                          dc.buttons.nM.focus();
-                        else if (dc.buttons.cM) dc.buttons.cM.focus();
-                        else if (!$A.data(dc.buttons.pM, "disabled"))
-                          dc.buttons.pM.focus();
-                        else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.nY, "disabled")
-                        )
-                          dc.buttons.nY.focus();
-                        else if (!config.condenseYear && dc.buttons.cY)
-                          dc.buttons.cY.focus();
-                        else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.pY, "disabled")
-                        )
-                          dc.buttons.pY.focus();
-
-                        ev.preventDefault();
-                      }
-                    },
-                    keyup: function (ev) {
-                      changePressed(ev);
-                      var k = $A.keyEvent(ev);
-
-                      if (k === 13 && !isKP && !dc.isAdd) {
-                        if (!$A.data(this, "disabled")) {
-                          $A.extend(true, dc.fn.current, dc.range.current);
-
-                          if (!dc.setFocus.firstOpen) {
+                          if (!$A.data(this, "disabled")) {
+                            $A.extend(true, dc.fn.current, dc.range.current);
                             // Toggles for openOnFocus support.
                             onFocusInit = false;
                             onFocusTraverse = true;
                             dc.storeCurrentDate(dc);
                             handleClick.apply(this, [ev, dc, targ]);
                           }
+
+                          ev.preventDefault();
+                        } else if (
+                          k === 32 &&
+                          commentsEnabled &&
+                          config.editor &&
+                          config.editor.show &&
+                          !formDC.openEditor
+                        ) {
+                          formDC.openEditor = true;
+                          formDC.reset();
+                          ev.preventDefault();
+                        } else if (
+                          (k >= 37 && k <= 40) ||
+                          k === 27 ||
+                          (k >= 33 && k <= 36)
+                        ) {
+                          var wd = dc.range.current.wDay;
+
+                          if (k === 37) {
+                            // Left arrow key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (dc.range.current.mDay > 1) {
+                              dc.range.current.mDay--;
+                              dc.range.current.wDay = !wd ? 6 : wd - 1;
+
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            } else if (
+                              dc.range.current.mDay === 1 &&
+                              !$A.data(dc.buttons.pM, "disabled")
+                            ) {
+                              var dateValues = dc.modifyDateValues(
+                                {
+                                  month: dc.range.current.month,
+                                  year: dc.range.current.year,
+                                },
+                                {
+                                  month: -1,
+                                },
+                              );
+
+                              var day = dc.range[dateValues.month].max;
+
+                              if (dateValues.month === 1)
+                                day =
+                                  new Date(
+                                    dateValues.year,
+                                    1,
+                                    29,
+                                  ).getMonth() === 1
+                                    ? 29
+                                    : 28;
+
+                              dc.date = new Date(
+                                dateValues.year,
+                                dateValues.month,
+                                day,
+                              );
+                              dc.setCurrent(dc);
+                              dc.rerenderTable(dc);
+                            }
+                          } else if (k === 39) {
+                            // Right arrow key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (
+                              dc.range.current.mDay <
+                              dc.range[dc.range.current.month].max
+                            ) {
+                              dc.range.current.mDay++;
+                              dc.range.current.wDay = wd === 6 ? 0 : wd + 1;
+
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            } else if (
+                              dc.range.current.mDay ==
+                                dc.range[dc.range.current.month].max &&
+                              !$A.data(dc.buttons.nM, "disabled")
+                            ) {
+                              var dateValues = dc.modifyDateValues(
+                                {
+                                  month: dc.range.current.month,
+                                  year: dc.range.current.year,
+                                },
+                                {
+                                  month: 1,
+                                },
+                              );
+
+                              dc.date = new Date(
+                                dateValues.year,
+                                dateValues.month,
+                                1,
+                              );
+                              dc.setCurrent(dc);
+                              dc.rerenderTable(dc);
+                            }
+                          } else if (k === 38) {
+                            // Up arrow key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (dc.range.current.mDay - 7 > 0) {
+                              dc.range.current.mDay -= 7;
+
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            } else if (!$A.data(dc.buttons.pM, "disabled")) {
+                              // Go to previous month
+                              var dateValues = dc.modifyDateValues(
+                                {
+                                  month: dc.range.current.month,
+                                  year: dc.range.current.year,
+                                },
+                                {
+                                  month: -1,
+                                },
+                              );
+
+                              if (
+                                dateValues.month === 1 &&
+                                new Date(dateValues.year, 1, 29).getMonth() ===
+                                  1
+                              )
+                                dc.range[dateValues.month].max = 29;
+                              else if (dateValues.month === 1)
+                                dc.range[dateValues.month].max = 28;
+
+                              var day =
+                                  dc.range[dateValues.month].max +
+                                  (dc.range.current.mDay - 7),
+                                intendedDate = new Date(
+                                  dateValues.year,
+                                  dateValues.month,
+                                  day,
+                                );
+
+                              // If intended selected date one month previous is outside of date range, do not attempt
+                              // to select the date cell
+                              if (!dc.isOutsideDateRange(intendedDate)) {
+                                dc.date = intendedDate;
+                                dc.setCurrent(dc);
+                                dc.rerenderTable(dc);
+                              }
+                            }
+                          } else if (k === 40) {
+                            // Down arrow key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (
+                              dc.range.current.mDay + 7 <=
+                              dc.range[dc.range.current.month].max
+                            ) {
+                              dc.range.current.mDay += 7;
+
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            } else if (!$A.data(dc.buttons.nM, "disabled")) {
+                              // Go to next month
+                              var dateValues = dc.modifyDateValues(
+                                {
+                                  month: dc.range.current.month,
+                                  year: dc.range.current.year,
+                                },
+                                {
+                                  month: 1,
+                                },
+                              );
+
+                              var day =
+                                  dc.range.current.mDay +
+                                  7 -
+                                  dc.range[dc.range.current.month].max,
+                                intendedDate = new Date(
+                                  dateValues.year,
+                                  dateValues.month,
+                                  day,
+                                );
+
+                              // If intended selected date one month ahead is outside of date range, do not attempt
+                              // to select the date cell
+                              if (!dc.isOutsideDateRange(intendedDate)) {
+                                dc.date = intendedDate;
+                                dc.setCurrent(dc);
+                                dc.rerenderTable(dc);
+                              }
+                            }
+                          } else if (k === 27) {
+                            // Esc key
+                            dc.remove();
+                            // Toggles for openOnFocus support.
+                            onFocusInit = false;
+                            onFocusTraverse = true;
+                            $A.focus(config.returnFocusTo || targ);
+                          } else if (k === 33) {
+                            // PageUp key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (dc.pageUpDownNatural) {
+                              if (pressed.alt) {
+                                gYear(false);
+                              } else {
+                                pMonth();
+                              }
+                            } else {
+                              if (pressed.alt) {
+                                gYear(true);
+                              } else {
+                                nMonth();
+                              }
+                            }
+                          } else if (k === 34) {
+                            // PageDown key
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (dc.pageUpDownNatural) {
+                              if (pressed.alt) {
+                                gYear(true);
+                              } else {
+                                nMonth();
+                              }
+                            } else {
+                              if (pressed.alt) {
+                                gYear(false);
+                              } else {
+                                pMonth();
+                              }
+                            }
+                          } else if (k === 36) {
+                            // Home key (goes to the first day of the row)
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (wd !== dc.iterS && dc.range.current.mDay > 1) {
+                              while (
+                                dc.range.current.wDay !== dc.iterS &&
+                                $A.get(dc.baseId + (dc.range.current.mDay - 1))
+                              ) {
+                                dc.range.current.wDay =
+                                  dc.range.current.wDay - 1 < 0
+                                    ? 6
+                                    : dc.range.current.wDay - 1;
+                                dc.range.current.mDay--;
+                              }
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            }
+                          } else if (k === 35) {
+                            // End key (goes to the last day of the row)
+                            $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                            if (
+                              wd !== dc.iterE &&
+                              dc.range.current.mDay <
+                                dc.range[dc.range.current.month].max
+                            ) {
+                              while (
+                                dc.range.current.wDay !== dc.iterE &&
+                                $A.get(dc.baseId + (dc.range.current.mDay + 1))
+                              ) {
+                                dc.range.current.wDay =
+                                  dc.range.current.wDay + 1 > 6
+                                    ? 0
+                                    : dc.range.current.wDay + 1;
+                                dc.range.current.mDay++;
+                              }
+                              dc.setFocus(
+                                dc.range.index[dc.range.current.mDay - 1],
+                                this,
+                              );
+                            }
+                          }
+                          ev.preventDefault();
+                        } else if (
+                          k === 9 &&
+                          !pressed.alt &&
+                          !pressed.ctrl &&
+                          !pressed.shift
+                        ) {
+                          // Tab key (without any simultaneous modifiers Alt / Ctrl / Shift)
+                          $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                          if (commentsEnabled && formDC.loaded) {
+                            if (!$A.isHidden(formDC.textarea)) {
+                              formDC.textarea.focus();
+                            } else {
+                              formDC.commentBtn.focus();
+                            }
+                          } else {
+                            dc.navUpdate();
+                            var navX = dc.nav[0];
+                            if ($A.isNode(navX)) navX.focus();
+                          }
+                          ev.preventDefault();
+                        } else if (
+                          k === 9 &&
+                          !pressed.alt &&
+                          !pressed.ctrl &&
+                          pressed.shift
+                        ) {
+                          // Tab key (with simultaneous Shift modifier)
+                          $A.extend(true, dc.prevCurrent, dc.range.current);
+
+                          dc.navUpdate();
+                          var navX = dc.nav[dc.nav.length - 1];
+                          if ($A.isNode(navX)) {
+                            navX.focus();
+                          } else if (commentsEnabled && formDC.loaded) {
+                            formDC.commentBtn.focus();
+                          }
+                          ev.preventDefault();
+                        }
+                      },
+                      keyup: function (ev) {
+                        changePressed(ev);
+                        var k = $A.keyEvent(ev);
+
+                        if (k === 13 && !isKP && !dc.isAdd) {
+                          if (!$A.data(this, "disabled")) {
+                            $A.extend(true, dc.fn.current, dc.range.current);
+
+                            if (!dc.setFocus.firstOpen) {
+                              // Toggles for openOnFocus support.
+                              onFocusInit = false;
+                              onFocusTraverse = true;
+                              dc.storeCurrentDate(dc);
+                              handleClick.apply(this, [ev, dc, targ]);
+                            }
+                          }
+
+                          ev.preventDefault();
                         }
 
-                        ev.preventDefault();
-                      }
-
-                      isKP = dc.setFocus.firstOpen = dc.isAdd = false;
+                        isKP = dc.setFocus.firstOpen = dc.isAdd = false;
+                      },
                     },
-                  },
-                  "." + baseId,
-                );
+                    "." + baseId,
+                  );
 
                 // Reconfigured for Esc btn processing
                 if (dc.showEscBtn) {
                   $A.on(
-                    dc.escBtn,
+                    dc.buttons.esc,
                     {
                       click: function (ev) {
                         dc.remove();
@@ -2108,23 +2158,8 @@ License: MIT <https://opensource.org/licenses/MIT>
                         ) {
                           // Tab key (without any simultaneous modifiers Alt / Ctrl / Shift)
 
-                          if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.pY, "disabled")
-                          )
-                            dc.buttons.pY.focus();
-                          else if (!config.condenseYear && dc.buttons.cY)
-                            dc.buttons.cY.focus();
-                          else if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.nY, "disabled")
-                          )
-                            dc.buttons.nY.focus();
-                          else if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (dc.buttons.cM) dc.buttons.cM.focus();
-                          else if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
+                          var navX = dc.navTo(this, 1);
+                          if ($A.isNode(navX)) navX.focus();
                           else mainDC.current.focus();
 
                           ev.preventDefault();
@@ -2134,9 +2169,15 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           pressed.shift
                         ) {
-                          if (commentsEnabled && formDC.loaded) {
+                          var navX = dc.navTo(this, 0);
+                          if ($A.isNode(navX)) {
+                            navX.focus();
+                          } else if (commentsEnabled && formDC.loaded) {
                             formDC.commentBtn.focus();
+                          } else {
+                            mainDC.current.focus();
                           }
+                          ev.preventDefault();
                         }
                       },
                       keyup: function (ev) {
@@ -2147,7 +2188,7 @@ License: MIT <https://opensource.org/licenses/MIT>
                   );
                 }
 
-                if (config.yearSelect && !config.condenseYear) {
+                if (yearSelect && !config.condenseYear) {
                   (function () {
                     var ySel = $A.get("#" + dc.currentBtnId + "Y"),
                       os = ySel.querySelectorAll("option"),
@@ -2160,8 +2201,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                           return dc.range.current.year;
                         })();
 
-                        dc.buttons.cYS.hidden = true;
-                        dc.buttons.cY.hidden = false;
+                        if (!forceSelect) {
+                          dc.buttons.cYS.hidden = true;
+                          dc.buttons.cY.hidden = false;
+                        }
                         if (year !== dc.range.current.year) {
                           dc.initialDate = new Date(
                             year,
@@ -2171,7 +2214,7 @@ License: MIT <https://opensource.org/licenses/MIT>
                           dc.setDate(dc);
                           dc.rerenderTable(dc);
                         } else {
-                          dc.buttons.cY.focus();
+                          dc.buttons[forceSelect ? "cYS" : "cY"].focus();
                         }
                       };
                     dc.buttons.cYS = ySel;
@@ -2183,19 +2226,51 @@ License: MIT <https://opensource.org/licenses/MIT>
                           changePressed(ev);
                           var k = $A.keyEvent(ev);
                           if (k === 27) {
-                            dc.buttons.cYS.hidden = true;
-                            dc.buttons.cY.hidden = false;
-                            dc.buttons.cY.focus();
+                            if (!forceSelect) {
+                              dc.buttons.cYS.hidden = true;
+                              dc.buttons.cY.hidden = false;
+                              dc.buttons.cY.focus();
+                            } else {
+                              dc.remove();
+                              onFocusInit = false;
+                              onFocusTraverse = true;
+                              $A.focus(config.returnFocusTo || targ);
+                            }
                             ev.stopPropagation();
                             ev.preventDefault();
+                          } else if (
+                            k === 9 &&
+                            !pressed.alt &&
+                            !pressed.ctrl &&
+                            !pressed.shift
+                          ) {
+                            if (forceSelect) {
+                              var navX = dc.navTo(this, 1);
+                              if ($A.isNode(navX)) navX.focus();
+                              else mainDC.current.focus();
+                              ev.preventDefault();
+                            }
+                          } else if (
+                            k === 9 &&
+                            !pressed.alt &&
+                            !pressed.ctrl &&
+                            pressed.shift
+                          ) {
+                            if (forceSelect) {
+                              var navX = dc.navTo(this, 0);
+                              if ($A.isNode(navX)) {
+                                navX.focus();
+                              } else if (commentsEnabled && formDC.loaded) {
+                                formDC.commentBtn.focus();
+                              } else {
+                                mainDC.current.focus();
+                              }
+                              ev.preventDefault();
+                            }
                           }
                         },
                         keyup: function (ev) {
                           changePressed(ev);
-                        },
-                        blur: function (ev) {
-                          dc.navBtn = "CY";
-                          ySelHandle(ev);
                         },
                         change: function (ev) {
                           dc.navBtn = "CY";
@@ -2209,18 +2284,22 @@ License: MIT <https://opensource.org/licenses/MIT>
                     dc.buttons.cY,
                     {
                       click: function (ev) {
-                        dc.buttons.cY.hidden = true;
-                        dc.buttons.cYS.hidden = false;
-                        dc.buttons.cYS.focus();
+                        if (!forceSelect) {
+                          dc.buttons.cY.hidden = true;
+                          dc.buttons.cYS.hidden = false;
+                          dc.buttons.cYS.focus();
+                        }
                         ev.preventDefault();
                       },
                       keydown: function (ev) {
                         changePressed(ev);
                         var k = $A.keyEvent(ev);
                         if (k === 13 || k === 32) {
-                          dc.buttons.cY.hidden = true;
-                          dc.buttons.cYS.hidden = false;
-                          dc.buttons.cYS.focus();
+                          if (!forceSelect) {
+                            dc.buttons.cY.hidden = true;
+                            dc.buttons.cYS.hidden = false;
+                            dc.buttons.cYS.focus();
+                          }
                           ev.preventDefault();
                         } else if (k === 27) {
                           dc.remove();
@@ -2233,13 +2312,8 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           !pressed.shift
                         ) {
-                          if (!$A.data(dc.buttons.nY, "disabled"))
-                            dc.buttons.nY.focus();
-                          else if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (dc.buttons.cM) dc.buttons.cM.focus();
-                          else if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
+                          var navX = dc.navTo(this, 1);
+                          if ($A.isNode(navX)) navX.focus();
                           else mainDC.current.focus();
                           ev.preventDefault();
                         } else if (
@@ -2248,10 +2322,14 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           pressed.shift
                         ) {
-                          if (!$A.data(dc.buttons.pY, "disabled"))
-                            dc.buttons.pY.focus();
-                          else if (dc.showEscBtn) dc.escBtn.focus();
-                          else mainDC.current.focus();
+                          var navX = dc.navTo(this, 0);
+                          if ($A.isNode(navX)) {
+                            navX.focus();
+                          } else if (commentsEnabled && formDC.loaded) {
+                            formDC.commentBtn.focus();
+                          } else {
+                            mainDC.current.focus();
+                          }
                           ev.preventDefault();
                         }
                       },
@@ -2263,7 +2341,7 @@ License: MIT <https://opensource.org/licenses/MIT>
                   );
                 }
 
-                if (config.monthSelect) {
+                if (monthSelect) {
                   (function () {
                     var mSel = $A.get("#" + dc.currentBtnId + "M"),
                       os = mSel.querySelectorAll("option"),
@@ -2276,8 +2354,10 @@ License: MIT <https://opensource.org/licenses/MIT>
                           return dc.range.current.month;
                         })();
 
-                        dc.buttons.cMS.hidden = true;
-                        dc.buttons.cM.hidden = false;
+                        if (!forceSelect) {
+                          dc.buttons.cMS.hidden = true;
+                          dc.buttons.cM.hidden = false;
+                        }
                         if (month !== dc.range.current.month) {
                           dc.initialDate = new Date(
                             dc.range.current.year,
@@ -2287,7 +2367,7 @@ License: MIT <https://opensource.org/licenses/MIT>
                           dc.setDate(dc);
                           dc.rerenderTable(dc);
                         } else {
-                          dc.buttons.cM.focus();
+                          dc.buttons[forceSelect ? "cMS" : "cM"].focus();
                         }
                       };
                     dc.buttons.cMS = mSel;
@@ -2295,27 +2375,80 @@ License: MIT <https://opensource.org/licenses/MIT>
                     $A.on(
                       mSel,
                       {
+                        click: function (ev) {
+                          if (monthOnly) {
+                            onFocusInit = false;
+                            onFocusTraverse = true;
+                            dc.storeCurrentDate(dc);
+                            handleClick.apply(this, [ev, dc, targ]);
+                          }
+                        },
                         keydown: function (ev) {
                           changePressed(ev);
                           var k = $A.keyEvent(ev);
-                          if (k === 27) {
-                            dc.buttons.cMS.hidden = true;
-                            dc.buttons.cM.hidden = false;
-                            dc.buttons.cM.focus();
+                          if (k === 13) {
+                            if (monthOnly) {
+                              onFocusInit = false;
+                              onFocusTraverse = true;
+                              dc.storeCurrentDate(dc);
+                              handleClick.apply(this, [ev, dc, targ]);
+                            }
+                          } else if (k === 27) {
+                            if (!forceSelect) {
+                              dc.buttons.cMS.hidden = true;
+                              dc.buttons.cM.hidden = false;
+                              dc.buttons.cM.focus();
+                            } else {
+                              dc.remove();
+                              onFocusInit = false;
+                              onFocusTraverse = true;
+                              $A.focus(config.returnFocusTo || targ);
+                            }
                             ev.stopPropagation();
                             ev.preventDefault();
+                          } else if (
+                            k === 9 &&
+                            !pressed.alt &&
+                            !pressed.ctrl &&
+                            !pressed.shift
+                          ) {
+                            if (forceSelect) {
+                              var navX = dc.navTo(this, 1);
+                              if ($A.isNode(navX)) navX.focus();
+                              else mainDC.current.focus();
+                              ev.preventDefault();
+                            }
+                          } else if (
+                            k === 9 &&
+                            !pressed.alt &&
+                            !pressed.ctrl &&
+                            pressed.shift
+                          ) {
+                            if (forceSelect) {
+                              var navX = dc.navTo(this, 0);
+                              if ($A.isNode(navX)) {
+                                navX.focus();
+                              } else if (commentsEnabled && formDC.loaded) {
+                                formDC.commentBtn.focus();
+                              } else {
+                                mainDC.current.focus();
+                              }
+                              ev.preventDefault();
+                            }
                           }
                         },
                         keyup: function (ev) {
                           changePressed(ev);
                         },
-                        blur: function (ev) {
-                          dc.navBtn = "CM";
-                          mSelHandle(ev);
-                        },
                         change: function (ev) {
-                          dc.navBtn = "CM";
+                          dc.navBtn = "cM";
                           mSelHandle(ev);
+                          if (monthOnly) {
+                            onFocusInit = false;
+                            onFocusTraverse = true;
+                            dc.storeCurrentDate(dc);
+                            handleClick.apply(this, [ev, dc, targ]);
+                          }
                         },
                       },
                       "." + baseId,
@@ -2325,18 +2458,22 @@ License: MIT <https://opensource.org/licenses/MIT>
                     dc.buttons.cM,
                     {
                       click: function (ev) {
-                        dc.buttons.cM.hidden = true;
-                        dc.buttons.cMS.hidden = false;
-                        dc.buttons.cMS.focus();
+                        if (!forceSelect) {
+                          dc.buttons.cM.hidden = true;
+                          dc.buttons.cMS.hidden = false;
+                          dc.buttons.cMS.focus();
+                        }
                         ev.preventDefault();
                       },
                       keydown: function (ev) {
                         changePressed(ev);
                         var k = $A.keyEvent(ev);
                         if (k === 13 || k === 32) {
-                          dc.buttons.cM.hidden = true;
-                          dc.buttons.cMS.hidden = false;
-                          dc.buttons.cMS.focus();
+                          if (!forceSelect) {
+                            dc.buttons.cM.hidden = true;
+                            dc.buttons.cMS.hidden = false;
+                            dc.buttons.cMS.focus();
+                          }
                           ev.preventDefault();
                         } else if (k === 27) {
                           dc.remove();
@@ -2349,8 +2486,8 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           !pressed.shift
                         ) {
-                          if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
+                          var navX = dc.navTo(this, 1);
+                          if ($A.isNode(navX)) navX.focus();
                           else mainDC.current.focus();
                           ev.preventDefault();
                         } else if (
@@ -2359,22 +2496,14 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           pressed.shift
                         ) {
-                          if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.nY, "disabled")
-                          )
-                            dc.buttons.nY.focus();
-                          else if (!config.condenseYear && dc.buttons.cY)
-                            dc.buttons.cY.focus();
-                          else if (
-                            !config.condenseYear &&
-                            !$A.data(dc.buttons.pY, "disabled")
-                          )
-                            dc.buttons.pY.focus();
-                          else if (dc.showEscBtn) dc.escBtn.focus();
-                          else mainDC.current.focus();
+                          var navX = dc.navTo(this, 0);
+                          if ($A.isNode(navX)) {
+                            navX.focus();
+                          } else if (commentsEnabled && formDC.loaded) {
+                            formDC.commentBtn.focus();
+                          } else {
+                            mainDC.current.focus();
+                          }
                           ev.preventDefault();
                         }
                       },
@@ -2423,11 +2552,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                         !pressed.ctrl &&
                         !pressed.shift
                       ) {
-                        if (dc.buttons.cM) dc.buttons.cM.focus();
-                        else if (!$A.data(dc.buttons.nM, "disabled"))
-                          dc.buttons.nM.focus();
+                        var navX = dc.navTo(this, 1);
+                        if ($A.isNode(navX)) navX.focus();
                         else mainDC.current.focus();
-
                         ev.preventDefault();
                       } else if (
                         k === 9 &&
@@ -2435,28 +2562,13 @@ License: MIT <https://opensource.org/licenses/MIT>
                         !pressed.ctrl &&
                         pressed.shift
                       ) {
-                        if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.nY, "disabled")
-                        ) {
-                          dc.buttons.nY.focus();
-                        } else if (!config.condenseYear && dc.buttons.cY) {
-                          dc.buttons.cY.focus();
-                        } else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.pY, "disabled")
-                        ) {
-                          dc.buttons.pY.focus();
+                        var navX = dc.navTo(this, 0);
+                        if ($A.isNode(navX)) {
+                          navX.focus();
+                        } else if (commentsEnabled && formDC.loaded) {
+                          formDC.commentBtn.focus();
                         } else {
-                          if (dc.showEscBtn) {
-                            dc.escBtn.focus();
-                          } else if (commentsEnabled && formDC.loaded) {
-                            if (!formDC.textarea.hidden)
-                              formDC.textarea.focus();
-                            else formDC.commentBtn.focus();
-                          } else {
-                            mainDC.current.focus();
-                          }
+                          mainDC.current.focus();
                         }
                         ev.preventDefault();
                       }
@@ -2505,7 +2617,11 @@ License: MIT <https://opensource.org/licenses/MIT>
                         !pressed.ctrl &&
                         !pressed.shift
                       ) {
-                        mainDC.current.focus();
+                        if (monthOnly) {
+                          dc.navUpdate();
+                          var navX = dc.nav[0];
+                          if ($A.isNode(navX)) navX.focus();
+                        } else mainDC.current.focus();
                         ev.preventDefault();
                       } else if (
                         k === 9 &&
@@ -2513,32 +2629,14 @@ License: MIT <https://opensource.org/licenses/MIT>
                         !pressed.ctrl &&
                         pressed.shift
                       ) {
-                        if (dc.buttons.cM) {
-                          dc.buttons.cM.focus();
-                        } else if (!$A.data(dc.buttons.pM, "disabled")) {
-                          dc.buttons.pM.focus();
-                        } else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.nY, "disabled")
-                        ) {
-                          dc.buttons.nY.focus();
-                        } else if (!config.condenseYear && dc.buttons.cY) {
-                          dc.buttons.cY.focus();
-                        } else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.buttons.pY, "disabled")
-                        ) {
-                          dc.buttons.pY.focus();
+                        dc.navUpdate();
+                        var navX = dc.navTo(this, 0);
+                        if ($A.isNode(navX)) {
+                          navX.focus();
+                        } else if (commentsEnabled && formDC.loaded) {
+                          formDC.commentBtn.focus();
                         } else {
-                          if (dc.showEscBtn) {
-                            dc.escBtn.focus();
-                          } else if (commentsEnabled && formDC.loaded) {
-                            if (!formDC.textarea.hidden)
-                              formDC.textarea.focus();
-                            else formDC.commentBtn.focus();
-                          } else {
-                            mainDC.current.focus();
-                          }
+                          mainDC.current.focus();
                         }
                         ev.preventDefault();
                       }
@@ -2588,16 +2686,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           !pressed.shift
                         ) {
-                          if (dc.buttons.cY) dc.buttons.cY.focus();
-                          else if (!$A.data(dc.buttons.nY, "disabled"))
-                            dc.buttons.nY.focus();
-                          else if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (dc.buttons.cM) dc.buttons.cM.focus();
-                          else if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
+                          var navX = dc.navTo(this, 1);
+                          if ($A.isNode(navX)) navX.focus();
                           else mainDC.current.focus();
-
                           ev.preventDefault();
                         } else if (
                           k === 9 &&
@@ -2605,12 +2696,14 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           pressed.shift
                         ) {
-                          if (dc.showEscBtn) {
-                            dc.escBtn.focus();
+                          var navX = dc.navTo(this, 0);
+                          if ($A.isNode(navX)) {
+                            navX.focus();
                           } else if (commentsEnabled && formDC.loaded) {
                             formDC.commentBtn.focus();
                           } else {
-                            mainDC.current.focus();
+                            if (monthOnly) dc.buttons.nM.focus();
+                            else mainDC.current.focus();
                           }
                           ev.preventDefault();
                         }
@@ -2660,13 +2753,9 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           !pressed.shift
                         ) {
-                          if (!$A.data(dc.buttons.pM, "disabled"))
-                            dc.buttons.pM.focus();
-                          else if (dc.buttons.cM) dc.buttons.cM.focus();
-                          else if (!$A.data(dc.buttons.nM, "disabled"))
-                            dc.buttons.nM.focus();
+                          var navX = dc.navTo(this, 1);
+                          if ($A.isNode(navX)) navX.focus();
                           else mainDC.current.focus();
-
                           ev.preventDefault();
                         } else if (
                           k === 9 &&
@@ -2674,19 +2763,13 @@ License: MIT <https://opensource.org/licenses/MIT>
                           !pressed.ctrl &&
                           pressed.shift
                         ) {
-                          if (dc.buttons.cY) dc.buttons.cY.focus();
-                          else if (!$A.data(dc.buttons.pY, "disabled")) {
-                            dc.buttons.pY.focus();
+                          var navX = dc.navTo(this, 0);
+                          if ($A.isNode(navX)) {
+                            navX.focus();
+                          } else if (commentsEnabled && formDC.loaded) {
+                            formDC.commentBtn.focus();
                           } else {
-                            if (dc.showEscBtn) {
-                              dc.escBtn.focus();
-                            } else if (commentsEnabled && formDC.loaded) {
-                              if (!formDC.textarea.hidden)
-                                formDC.textarea.focus();
-                              else formDC.commentBtn.focus();
-                            } else {
-                              mainDC.current.focus();
-                            }
+                            mainDC.current.focus();
                           }
                           ev.preventDefault();
                         }
@@ -2698,9 +2781,58 @@ License: MIT <https://opensource.org/licenses/MIT>
                     "." + baseId,
                   );
 
+                (function () {
+                  var btns = [
+                    "esc",
+                    "pY",
+                    "cY",
+                    "cYS",
+                    "nY",
+                    "pM",
+                    "cM",
+                    "cMS",
+                    "nM",
+                  ];
+                  dc.navUpdate = function () {
+                    dc.nav = [];
+                    for (var iB = 0; iB < btns.length; iB++) {
+                      var b = dc.buttons[btns[iB]];
+                      if (
+                        b &&
+                        !$A.isDisabled(b) &&
+                        !$A.isHidden(b) &&
+                        $A.isFocusable(b)
+                      )
+                        dc.nav.push(b);
+                    }
+                  };
+                  dc.navUpdate();
+                  dc.navTo = function (cur, forward) {
+                    dc.navUpdate();
+                    if (monthOnly) {
+                      if (cur === dc.nav[0] && !forward)
+                        return dc.nav[dc.nav.length - 1];
+                      if (cur === dc.nav[dc.nav.length - 1] && forward)
+                        return dc.nav[0];
+                      return dc.nav[
+                        $A.inArray(cur, dc.nav) + (forward ? 1 : -1)
+                      ];
+                    }
+                    if (
+                      !dc.nav.length ||
+                      (cur === dc.nav[0] && !forward) ||
+                      (cur === dc.nav[dc.nav.length - 1] && forward)
+                    )
+                      return null;
+                    return (
+                      dc.nav[$A.inArray(cur, dc.nav) + (forward ? 1 : -1)] ||
+                      null
+                    );
+                  };
+                })();
+
                 dc.range.index = dc.container.querySelectorAll("td.dayInMonth");
                 dc.setFocus.firstOpen = true;
-
                 dc.setFocus(dc.range.index[dc.range.current.mDay - 1]);
 
                 if (!dc.rerendering) {
@@ -2713,6 +2845,8 @@ License: MIT <https://opensource.org/licenses/MIT>
                     dc.datepickerLoaded = true;
                   }, 750);
                 }
+
+                triggered = false;
               },
               helpTextShort: helpTextShort,
               helpText: helpText,
@@ -3001,22 +3135,21 @@ License: MIT <https://opensource.org/licenses/MIT>
                         !ev.shiftKey &&
                         !ev.ctrlKey
                       ) {
-                        if (dc.parent.showEscBtn) {
-                          dc.escBtn.focus();
-                        } else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.parent.buttons.pY, "disabled")
-                        )
-                          dc.parent.buttons.pY.focus();
-                        else if (
-                          !config.condenseYear &&
-                          !$A.data(dc.parent.buttons.nY, "disabled")
-                        )
-                          dc.parent.buttons.nY.focus();
-                        else if (!$A.data(dc.parent.buttons.pM, "disabled"))
-                          dc.parent.buttons.pM.focus();
-                        else if (!$A.data(dc.parent.buttons.nM, "disabled"))
-                          dc.parent.buttons.nM.focus();
+                        var navX = dc.parent.nav[0];
+                        if ($A.isNode(navX)) navX.focus();
+                        else mainDC.current.focus();
+                        ev.preventDefault();
+                      } else if (
+                        k === 9 &&
+                        !pressed.alt &&
+                        !pressed.ctrl &&
+                        pressed.shift
+                      ) {
+                        if (!$A.isHidden(formDC.textarea)) {
+                          formDC.textarea.focus();
+                        } else {
+                          mainDC.current.focus();
+                        }
                         ev.preventDefault();
                       }
                     },
@@ -3098,6 +3231,7 @@ License: MIT <https://opensource.org/licenses/MIT>
               // Toggles for openOnFocus support.
               onFocusInit = false;
               onFocusTraverse = true;
+              triggered = true;
 
               $A.trigger(this, "opendatepicker");
               setTimeout(odcDelFn, 1000);
@@ -3109,7 +3243,8 @@ License: MIT <https://opensource.org/licenses/MIT>
               onFocusTraverse = false;
               setTimeout(odcDelFn, 1000);
             }
-          };
+          },
+          triggered = false;
 
         $A.on(
           trigger,
@@ -3206,7 +3341,11 @@ License: MIT <https://opensource.org/licenses/MIT>
                 if (k === 40 && onFocusInit && !onFocusTraverse && odc.loaded) {
                   onFocusInit = false;
                   onFocusTraverse = true;
-                  odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
+                  if (monthOnly) {
+                    if (!odc.buttons.cMS.hidden) odc.buttons.cMS.focus();
+                    else if (!odc.buttons.cM.hidden) odc.buttons.cM.focus();
+                  } else
+                    odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
                   ev.preventDefault();
                   ev.stopPropagation();
                 } else if (
@@ -3222,7 +3361,11 @@ License: MIT <https://opensource.org/licenses/MIT>
                   setTimeout(odcDelFn, 1000);
                   onFocusInit = false;
                   onFocusTraverse = true;
-                  odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
+                  if (monthOnly) {
+                    if (!odc.buttons.cMS.hidden) odc.buttons.cMS.focus();
+                    else if (!odc.buttons.cM.hidden) odc.buttons.cM.focus();
+                  } else
+                    odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
                   ev.preventDefault();
                   ev.stopPropagation();
                 } else if (
@@ -3255,7 +3398,11 @@ License: MIT <https://opensource.org/licenses/MIT>
                 ) {
                   onFocusInit = false;
                   onFocusTraverse = true;
-                  odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
+                  if (monthOnly) {
+                    if (!odc.buttons.cMS.hidden) odc.buttons.cMS.focus();
+                    else if (!odc.buttons.cM.hidden) odc.buttons.cM.focus();
+                  } else
+                    odc.setFocus(odc.range.index[odc.range.current.mDay - 1]);
                   setTimeout(function () {
                     $A.announce(odc.helpTextShort);
                   }, 1);

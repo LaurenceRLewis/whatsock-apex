@@ -55,9 +55,11 @@ returnFocusTo: $A.get('elementId'),
 // Optionally convert the static year field into a year selector dropdown.
 yearSelect: true,
 yearSelectMin: 1900,
-yearSelectMax: 2030,
+yearSelectMax: new Date().getFullYear() + 5,
 // Optionally convert the static month field into a month selector dropdown.
 monthSelect: true,
+// Force the month/year select dropdown to render instead of a button.
+forceSelect: false,
 
 // Set initial inline styling properties for the dynamically rendered calendar.
 style: {
@@ -219,6 +221,11 @@ rightButtonMonthText: '&gt;',
 openOnFocus: false,
 openOnFocusHelpText: 'Press Down arrow to browse the calendar, or Escape to close.',
 
+// Specify that only the year and month selector will be rendered, and no individual dates.
+// Set inputDateFormat to return the correct string value when the datepicker closes. For example:
+// inputDateFormat: 'MM/YYYY',
+monthOnly: false,
+
 // Display a Close button
 showEscBtn: true,
 escBtnName: 'Close',
@@ -230,6 +237,7 @@ minDate: undefined,
 maxDate: undefined,
 
 // Using a token system, set a specific date string format to be used when setting the selected value into the calendar input box
+// 'yy': 2 digit year, 19
 // 'YYYY': 4 digit year, 2019
 // 'MMMM': Full name of month, January, etc.
 // 'dddd': Full name of weekday, Monday, etc.

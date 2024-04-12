@@ -332,28 +332,6 @@ p.dark--bg {
 /* -------------------------------- NAVIGATION ------------------------------- */
 /* --------------------------------------------------------------------------- */
 
-/*nav {
-    text-align: center;
-    max-width: 40em;
-    padding: 0 5em;
-    margin: 2em auto;
-}
-
-nav li {
-  list-style-type: none;
-}
-nav button,
-nav a,
-nav a:visited {
-  display: block;
-  font: bold 1.2em/1 Frutiger, Helvetica, Arial, sans-serif;
-  text-transform: uppercase;
-  color: var(--globalWhite);
-  background: var(--navLinkBackground);
-  padding: 0.5em 0;
-  border: none;
-  border-top: 1px solid var(--datepicker-lightGrey);
-}*/
 nav.navigation--parent {
   text-align: center;
   max-width: 90em;
@@ -363,7 +341,6 @@ nav.navigation--parent p {
   margin: 1.5em 0;
 }
 nav {
-  text-align: center;
   max-width: 90em;
   margin: auto;
   margin-bottom: 1em;
@@ -379,7 +356,7 @@ nav li {
   list-style-type: none;
   font-size: 1rem;
   display: inline;
-  height: 3em;
+  margin: 0.8em;
 }
 
 nav button:hover,
@@ -399,13 +376,28 @@ nav > ul > li > a[aria-current="true"] {
 nav > ul > li > a,
 nav > p > a {
   line-height: 1.5;
-  padding: 0.5em 1.2em;
   background: var(--navLinkBackground);
   color: var(--globalWhite);
   border-top: 2px solid var(--whatsock-orange-main);
   margin: 0 2px;
   text-decoration: none;
+  padding: 0.5em 1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
+
+@media (max-width: 440px) {
+  nav li {
+    margin: 0.2em;
+  }
+  nav > ul > li > a,
+  nav > p > a {
+    max-width: 300px; /* Set maximum width */
+    display: inline-block; /* Required for max-width to work */
+  }
+}
+
 li.mobile--componentName {
   font-size: 0.65rem;
   margin-bottom: 0.4em;
