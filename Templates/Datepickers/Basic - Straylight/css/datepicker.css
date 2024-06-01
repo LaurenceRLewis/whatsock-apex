@@ -1,24 +1,17 @@
 /**********************************************
-Common Datepicker Colours - update in colors.css
+Common Datepicker Colours
 *************************************************/
-/*
-
---combobox-midGrey; #777777;
---combobox-lightGrey2; #e0e0e0;
---datepicker-lmGrey; #bdbdbd;
---datepicker-darkGrey; #49182e;
---datepicker-mmGrey; #c2c2c2;
---datepicket-dGrey; #3d4043;
---globalWhite; #ffffff;
---elementBlack; #1f1f23;
---bodyText; #262626;
---whatsock-blue; #63b7c2;
---whatsock-red; #c13836;
---datepicker-pink; #db7093;
---datepicker-dayInMonth; #e6e6e6;
---datepicker-day; #e2a037;
-
-*/
+:root {
+  --datepicker-pink: #db7093;
+  --datepicker-dayInMonth: #e6e6e6;
+  --datepicker-day: #e2a037;
+  --datepicker-darkGrey: #49182e;
+  --datepicker-lightGrey: #cccccc;
+  --datepicker-lmGrey: #bdbdbd;
+  --datepicker-mmGrey: #c2c2c2;
+  --datepicker-dGrey: #3d4043;
+  --datepicker-codeBGrey: #e4e4e4;
+}
 
 /**********************************************
 Common Datepicker styles
